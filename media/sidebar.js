@@ -172,7 +172,7 @@
     gpt: [["", "关闭 · 不启用 reasoning"], ["low", "低 · reasoning.effort=low"], ["medium", "中 · reasoning.effort=medium"], ["high", "高 · reasoning.effort=high"], ["xhigh", "极高 · reasoning.effort=xhigh"]],
     gemini: [["", "默认 · medium（API 默认，不覆盖）"], ["minimal", "Minimal · 最低思考 / 最低延迟"], ["low", "Low · 速度优先"], ["medium", "Medium · 推荐平衡"], ["high", "High · 最深推理"]]
   };
-  const tmp21 = new Set(["cfgByok1Host", "cfgByok1Key", "cfgByok1Model", "cfgByok1ThinkingEffort", "cfgByok2Host", "cfgByok2Key", "cfgByok2Model", "cfgByok2ThinkingEffort", "cfgHybridPort", "cfgInferencePort", "cfgAnthropicPath", "cfgOpenaiPath", "cfgMaxTokens", "cfgCompletionTimeoutMs", "cfgSysPromptOverride", "cfgSysPromptPath"]);
+  const tmp21 = new Set(["cfgByok1Host", "cfgByok1Key", "cfgByok1Model", "cfgByok1ThinkingEffort", "cfgByok1ServiceTier", "cfgByok2Host", "cfgByok2Key", "cfgByok2Model", "cfgByok2ThinkingEffort", "cfgByok2ServiceTier", "cfgHybridPort", "cfgInferencePort", "cfgAnthropicPath", "cfgOpenaiPath", "cfgMaxTokens", "cfgCompletionTimeoutMs", "cfgSysPromptOverride", "cfgSysPromptPath"]);
   let tmp22 = null;
   function fn20a(arg0) {
     return !!(arg0 && arg0.id && tmp21.has(arg0.id));
@@ -242,7 +242,11 @@
     const tmp4 = fn4("cfgByok" + tmp32 + "ThinkingEffortRow");
     const tmp5 = fn4("cfgByok" + tmp32 + "ThinkingEffort");
     const tmp6 = fn4("cfgByok" + tmp32 + "ThinkingLabel");
+    const tmp10 = fn4("cfgByok" + tmp32 + "ServiceTierRow");
     const tmp7 = fn15(arg1);
+    if (tmp10) {
+      tmp10.classList.toggle("hidden", tmp7 !== "gpt");
+    }
     if (tmp4) {
       tmp4.classList.toggle("hidden", !fn17(tmp7, arg1));
     }
@@ -292,6 +296,7 @@
     fn13("cfgByok" + tmp22 + "Host", tmp4);
     fn13("cfgByok" + tmp22 + "Key", tmp5);
     fn13("cfgByok" + tmp22 + "ThinkingEffort", arg0[tmp32 + "THINKING_EFFORT"] || (tmp22 === 1 ? arg0.OPENAI_REASONING_EFFORT || "" : ""));
+    fn13("cfgByok" + tmp22 + "ServiceTier", arg0[tmp32 + "OPENAI_SERVICE_TIER"] || (tmp22 === 1 ? arg0.OPENAI_SERVICE_TIER || "" : ""));
     fn19(arg1, tmp6, arg0[tmp32 + "THINKING_EFFORT"] || (tmp22 === 1 ? arg0.OPENAI_REASONING_EFFORT || "" : ""));
     const tmp7 = fn11(tmp22);
     const tmp8 = fn();
@@ -435,6 +440,7 @@
       [tmp6 + "OPENAI_API_HOST"]: tmp32,
       [tmp6 + "OPENAI_API_KEY"]: tmp22,
       [tmp6 + "OPENAI_API_PATH"]: (fn4("cfgOpenaiPath") || {}).value || "",
+      [tmp6 + "OPENAI_SERVICE_TIER"]: ((fn4("cfgByok" + tmp12 + "ServiceTier") || {}).value || "").trim(),
       [tmp6 + "MODEL"]: tmp5,
       [tmp6 + "THINKING_EFFORT"]: ((fn4("cfgByok" + tmp12 + "ThinkingEffort") || {}).value || "").trim()
     };
@@ -451,6 +457,7 @@
       OPENAI_API_HOST: tmp02.BYOK1_OPENAI_API_HOST,
       OPENAI_API_KEY: tmp02.BYOK1_OPENAI_API_KEY,
       OPENAI_API_PATH: tmp02.BYOK1_OPENAI_API_PATH,
+      OPENAI_SERVICE_TIER: tmp02.BYOK1_OPENAI_SERVICE_TIER || "",
       DEFAULT_MODEL: tmp02.BYOK1_MODEL,
       MAX_TOKENS: (fn4("cfgMaxTokens") || {}).value || "16384",
       COMPLETION_TIMEOUT_MS: (fn4("cfgCompletionTimeoutMs") || {}).value || "12000",

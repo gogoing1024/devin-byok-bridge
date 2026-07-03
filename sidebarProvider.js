@@ -292,6 +292,9 @@ class SidebarProvider {
     if (!String(tmp1.BYOK1_THINKING_EFFORT || "").trim()) {
       tmp1.BYOK1_THINKING_EFFORT = tmp1.OPENAI_REASONING_EFFORT || "";
     }
+    if (!String(tmp1.BYOK1_OPENAI_SERVICE_TIER || "").trim()) {
+      tmp1.BYOK1_OPENAI_SERVICE_TIER = tmp1.OPENAI_SERVICE_TIER || "";
+    }
     return tmp1;
   }
   validateByokSlots(tmp02) {
@@ -615,13 +618,14 @@ class SidebarProvider {
     const tmp5 = tmp4 === "__DEFAULT__" ? tmp3 : tmp4 || tmp3 || (tmp2 && !tmp2.startsWith("MODEL_") ? tmp2 : "");
     const tmp6 = this.stripDiagnosticThinkingSuffix(tmp5);
     const tmp7 = tmp6 ? this.isDiagnosticOpenAIModel(tmp6) ? "OpenAI" : "Anthropic" : "未解析";
-    const tmp8 = tmp2.endsWith("-priority") ? "fast" : undefined;
+    const tmp8 = tmp2.endsWith("-priority") || tmp5.endsWith("-priority") ? "fast" : tmp2 === "MODEL_CLAUDE_4_OPUS_THINKING_BYOK" ? tmp1.BYOK2_OPENAI_SERVICE_TIER : tmp2 === "MODEL_CLAUDE_4_OPUS_BYOK" ? tmp1.BYOK1_OPENAI_SERVICE_TIER || tmp1.OPENAI_SERVICE_TIER : this.isDiagnosticOpenAIModel(tmp6) ? tmp1.OPENAI_SERVICE_TIER : "";
+    const tmp9 = String(tmp8 || "").trim().toLowerCase() === "fast" ? "fast" : undefined;
     return {
       requested: tmp2,
       resolved: tmp5,
       upstream: tmp6,
       provider: tmp7,
-      serviceTier: tmp8,
+      serviceTier: tmp9,
       usesDefault: tmp4 === "__DEFAULT__" || !tmp4 && !!tmp3,
       thinking: /-thinking$/i.test(tmp5)
     };
@@ -640,7 +644,7 @@ class SidebarProvider {
     const tmp1 = String(tmp02.DEFAULT_MODEL || "").trim();
     const tmp2 = tmp1.replace(/-thinking$/i, "");
     const tmp3 = /^(gpt-)/i.test(tmp2) || /^MODEL_GPT/i.test(tmp1);
-    const tmp4 = String(tmp02.OPENAI_REASONING_EFFORT || "").trim();
+    const tmp4 = String(tmp02.BYOK1_THINKING_EFFORT || tmp02.OPENAI_REASONING_EFFORT || "").trim();
     const tmp5 = Number.parseInt(String(tmp02.MAX_TOKENS || "0"), 10);
     const tmp6 = [];
     if (/opus/i.test(tmp1)) {
@@ -656,13 +660,14 @@ class SidebarProvider {
       tmp6.push("MAX_TOKENS=" + tmp5);
     }
     const tmp7 = Number.parseInt(String(tmp02.COMPLETION_TIMEOUT_MS || "12000"), 10);
+    const tmp9 = tmp3 && String(tmp02.BYOK1_OPENAI_SERVICE_TIER || tmp02.OPENAI_SERVICE_TIER || "").trim().toLowerCase() === "fast";
     if (Number.isFinite(tmp7) && tmp7 < 10000) {
       tmp6.push("补全超时 " + tmp7 + "ms 偏短");
     }
     if (!tmp1) {
       tmp6.push("未设置默认模型");
     }
-    const tmp8 = tmp6.length > 0 ? "Inline/Fast 首包窗口较紧（当前补全超时约 " + (Number.isFinite(tmp7) ? tmp7 : 12000) + "ms）；风险：" + tmp6.join("、") + "。如频繁空返回，优先降低模型/Token" + (tmp3 ? "/推理强度" : "") + " 或改用普通 Chat。" : "当前默认模型未命中明显慢首包风险；Inline/Fast 仍受上游首包延迟影响。";
+    const tmp8 = tmp6.length > 0 ? "Inline/Fast 首包窗口较紧（当前补全超时约 " + (Number.isFinite(tmp7) ? tmp7 : 12000) + "ms）；风险：" + tmp6.join("、") + "。如频繁空返回，优先降低模型/Token" + (tmp3 ? "/推理强度" : "") + " 或改用普通 Chat。" + (tmp9 ? "当前已启用 service_tier=fast。" : "") : "当前默认模型未命中明显慢首包风险；" + (tmp9 ? "已启用 service_tier=fast；" : "") + "Inline/Fast 仍受上游首包延迟影响。";
     return this.envCheckItem("inline-fast-timeout", "Inline/Fast 超时风险", tmp6.length > 0 ? "warning" : "ok", tmp8, false);
   }
   execFileText(tmp02, tmp1, tmp2) {
@@ -1904,6 +1909,8 @@ class SidebarProvider {
     const tmp31 = esc(tmp2.BYOK1_THINKING_EFFORT || tmp2.OPENAI_REASONING_EFFORT || "");
     const tmp32 = esc(tmp2.BYOK2_THINKING_EFFORT || "");
     const tmp33 = Object.prototype.hasOwnProperty.call(tmp2, "OPENAI_REASONING_EFFORT") ? tmp2.OPENAI_REASONING_EFFORT : "";
+    const tmp40 = tmp2.BYOK1_OPENAI_SERVICE_TIER || tmp2.OPENAI_SERVICE_TIER || "";
+    const tmp41 = tmp2.BYOK2_OPENAI_SERVICE_TIER || "";
     const tmp34 = tmp7 === tmp1.patches.length ? "badge-ok" : "badge-warn";
     const tmp35 = tmp7 === tmp1.patches.length ? "已就绪" : "需安装";
     const tmp37 = tmp2.SYSTEM_PROMPT_OVERRIDE === "true" ? "true" : "false";
@@ -2842,6 +2849,7 @@ input:focus, select:focus {
                 <button type="button" class="btn btn-s sm" data-ws-action="fetchModels" data-ws-slot="1" style="padding:4px 8px">加载模型</button>
             </div>
             <div class="fg" id="cfgByok1ThinkingEffortRow"><label id="cfgByok1ThinkingLabel">${esc(thinkingEffort_1.getThinkingIntensityHint(thinkingEffort_1.detectModelProvider(tmp27)))}</label><select id="cfgByok1ThinkingEffort">${buildThinkingEffortOptions(tmp27, tmp31)}</select></div>
+            <div class="fg" id="cfgByok1ServiceTierRow"><label>GPT Fast Mode</label><select id="cfgByok1ServiceTier">${buildOpenAIServiceTierOptions(tmp40)}</select></div>
             <div id="modelFetchStatus1" style="font-size:10px;color:${tmp17}"></div>
         </div>
         <div class="guide-block byok2-stripe" style="margin-bottom:10px">
@@ -2857,6 +2865,7 @@ input:focus, select:focus {
                 <button type="button" class="btn btn-s sm" data-ws-action="fetchModels" data-ws-slot="2" style="padding:4px 8px">加载模型</button>
             </div>
             <div class="fg" id="cfgByok2ThinkingEffortRow"><label id="cfgByok2ThinkingLabel">${esc(thinkingEffort_1.getThinkingIntensityHint(thinkingEffort_1.detectModelProvider(tmp30)))}</label><select id="cfgByok2ThinkingEffort">${buildThinkingEffortOptions(tmp30, tmp32)}</select></div>
+            <div class="fg" id="cfgByok2ServiceTierRow"><label>GPT Fast Mode</label><select id="cfgByok2ServiceTier">${buildOpenAIServiceTierOptions(tmp41)}</select></div>
             <div id="modelFetchStatus2" style="font-size:10px;color:${tmp17}"></div>
         </div>
         <div class="guide-block" style="margin-bottom:10px">
@@ -2950,6 +2959,10 @@ input:focus, select:focus {
   }
 }
 exports.SidebarProvider = SidebarProvider;
+function buildOpenAIServiceTierOptions(arg0) {
+  const tmp1 = String(arg0 || "").trim().toLowerCase() === "fast" ? "fast" : "";
+  return [["", "默认 · 不覆盖 service_tier"], ["fast", "Fast · service_tier=fast"]].map(([tmp2, tmp3]) => "<option value=\"" + esc(tmp2) + "\"" + (tmp1 === tmp2 ? " selected" : "") + ">" + esc(tmp3) + "</option>").join("");
+}
 function buildThinkingEffortOptions(arg0, arg1) {
   return thinkingEffort_1.buildThinkingEffortOptionsHtml(arg0, arg1);
 }

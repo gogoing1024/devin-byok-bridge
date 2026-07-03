@@ -10,8 +10,8 @@ import { fileURLToPath } from "node:url";
 
 import { sanitizeAnthropicMessages, parseGetChatMessageRequest } from "../proxy-scripts/src/handlers/parse-request.js";
 import { applySystemPromptOverride, clearSystemPromptCache } from "../proxy-scripts/src/handlers/system-prompt.js";
-import { shouldFallbackToChatCompletions, toChatCompletionsMessages, buildOpenAIChatCompletionsBody, requiresConfiguredDefaultModel, toInjectedTailMessage } from "../proxy-scripts/src/handlers/chat.js";
-import { setRuntimeConfig, handleConfigRequest } from "../proxy-scripts/src/handlers/models.js";
+import { shouldFallbackToChatCompletions, toChatCompletionsMessages, buildOpenAIResponsesBody, buildOpenAIChatCompletionsBody, requiresConfiguredDefaultModel, toInjectedTailMessage } from "../proxy-scripts/src/handlers/chat.js";
+import { setRuntimeConfig, getSlotServiceTier, handleConfigRequest } from "../proxy-scripts/src/handlers/models.js";
 import { applyAnthropicPromptCache, normalizeOpenAIPromptCacheMode, prepareToolsForPromptCache, shouldRetryWithoutPromptCache, sortToolsForStablePrefix } from "../proxy-scripts/src/handlers/prompt-cache.js";
 import { computeCacheHitRate, extractOpenAIResponsesUsage, formatUsageLog, mergeUsage } from "../proxy-scripts/src/handlers/usage-log.js";
 import { parseOpenAISSEChunk, OpenAIStreamProcessor } from "../proxy-scripts/src/handlers/openai-stream.js";
@@ -262,12 +262,18 @@ test("handleConfigRequest applies POST body when hybrid passes buffered body", a
   await handleConfigRequest(req, res, JSON.stringify({
     defaultModel: "claude-sonnet-4-6",
     BYOK1_MODEL: "claude-sonnet-4-6",
-    BYOK2_MODEL: "claude-opus-4-8-thinking"
+    BYOK2_MODEL: "claude-opus-4-8-thinking",
+    OPENAI_SERVICE_TIER: "FAST",
+    BYOK1_OPENAI_SERVICE_TIER: "fast",
+    BYOK2_OPENAI_SERVICE_TIER: "slow"
   }));
   assert.equal(status, 200);
   const parsed = JSON.parse(body);
   assert.equal(parsed.defaultModel, "claude-sonnet-4-6");
   assert.equal(parsed.byok2.model, "claude-opus-4-8-thinking");
+  assert.equal(parsed.openaiServiceTier, "fast");
+  assert.equal(parsed.byok1.serviceTier, "fast");
+  assert.equal(parsed.byok2.serviceTier, "");
 });
 
 test("system prompt override hot reload reads updated prompt file", async () => {
@@ -381,6 +387,47 @@ test("buildOpenAIChatCompletionsBody can omit Gemini thinking fields", () => {
   assert.ok(withThinking.thinking_config || withThinking.extra_body);
   assert.equal(withoutThinking.thinking_config, undefined);
   assert.equal(withoutThinking.extra_body, undefined);
+});
+
+test("OpenAI request body builders include fast service tier", () => {
+  const input = {
+    systemPrompt: "",
+    messages: [{
+      role: "user",
+      content: "hello"
+    }],
+    resolvedModel: "gpt-5.4",
+    serviceTier: "fast",
+    thinkingOptions: {
+      thinkingEnabled: false
+    },
+    forwardTools: false
+  };
+  const responses = buildOpenAIResponsesBody(input);
+  const chat = buildOpenAIChatCompletionsBody(input);
+
+  assert.equal(responses.service_tier, "fast");
+  assert.equal(chat.service_tier, "fast");
+});
+
+test("runtime OpenAI service tier config is sanitized and slot-aware", () => {
+  const current = setRuntimeConfig({
+    OPENAI_SERVICE_TIER: "FAST",
+    BYOK1_OPENAI_SERVICE_TIER: "fast",
+    BYOK2_OPENAI_SERVICE_TIER: "slow"
+  });
+
+  assert.equal(current.openaiServiceTier, "fast");
+  assert.equal(current.byok1.serviceTier, "fast");
+  assert.equal(current.byok2.serviceTier, "");
+  assert.equal(getSlotServiceTier(1), "fast");
+  assert.equal(getSlotServiceTier(2), "");
+
+  setRuntimeConfig({
+    OPENAI_SERVICE_TIER: "",
+    BYOK1_OPENAI_SERVICE_TIER: "",
+    BYOK2_OPENAI_SERVICE_TIER: ""
+  });
 });
 
 test("Claude 4 Bedrock model ids use adaptive thinking", () => {
@@ -706,6 +753,9 @@ test("hybrid-server POST /api/config hot reload responds without timeout", {
       defaultModel: "integration-test-model",
       BYOK1_MODEL: "integration-test-model",
       BYOK2_MODEL: "integration-test-thinking",
+      OPENAI_SERVICE_TIER: "fast",
+      BYOK1_OPENAI_SERVICE_TIER: "fast",
+      BYOK2_OPENAI_SERVICE_TIER: "fast",
       SYSTEM_PROMPT_OVERRIDE: true,
       systemPromptText: "integration prompt",
       systemPromptVersion: String(Date.now())
@@ -715,11 +765,17 @@ test("hybrid-server POST /api/config hot reload responds without timeout", {
     const updated = JSON.parse(posted.body);
     assert.equal(updated.defaultModel, "integration-test-model");
     assert.equal(updated.byok2.model, "integration-test-thinking");
+    assert.equal(updated.openaiServiceTier, "fast");
+    assert.equal(updated.byok1.serviceTier, "fast");
+    assert.equal(updated.byok2.serviceTier, "fast");
     const fetched = await httpJsonRequest(port, "GET", "/api/config");
     assert.equal(fetched.status, 200);
     const current = JSON.parse(fetched.body);
     assert.equal(current.defaultModel, "integration-test-model");
     assert.equal(current.byok2.model, "integration-test-thinking");
+    assert.equal(current.openaiServiceTier, "fast");
+    assert.equal(current.byok1.serviceTier, "fast");
+    assert.equal(current.byok2.serviceTier, "fast");
     assert.equal(current.systemPromptOverride, true);
     assert.equal(current.systemPromptText, "integration prompt");
   } finally {

@@ -8,7 +8,7 @@ import { AnthropicStreamProcessor, parseSSEChunk } from "./anthropic-stream.js";
 import { OpenAIStreamProcessor, ChatCompletionsStreamProcessor, parseOpenAISSEChunk } from "./openai-stream.js";
 import { wrapEnvelope, endOfStreamEnvelope, streamHeaders } from "../connect.js";
 import { getByokSlot, buildAnthropicThinkingPayload, buildGeminiThinkingPayload, thinkingEffortToAnthropicBudget, thinkingEffortToGeminiBudget, thinkingEffortToOpenAIReasoningEffort, detectModelProvider, usesGeminiThinkingLevel, sanitizeGeminiThinkingEffort } from "./byok-slots.js";
-import { getProviderConfig, getRuntimeConfig, getSlotModel, getSlotThinkingEffort } from "./models.js";
+import { getProviderConfig, getRuntimeConfig, getSlotModel, getSlotThinkingEffort, getSlotServiceTier } from "./models.js";
 import { buildTextDelta } from "./build-response.js";
 import { emitChatStart, emitChatEnd, emitAIText, emitToolCall, emitStreamStatus, consumeInjectedMessages, getActiveMonitorTarget } from "../ws-bridge.js";
 import { buildGatewayCapabilityKey, getGatewayCapability, markGatewayCapability } from "./gateway-capability.js";
@@ -191,14 +191,24 @@ const tmp0 = {
   MODEL_CHAT: "__DEFAULT__"
 };
 const MODEL_MAP = tmp0;
-function getServiceTier(arg0) {
-  if (!arg0) {
-    return undefined;
-  }
-  if (arg0.endsWith("-priority")) {
+function getServiceTier(arg0, arg1 = "", arg2 = null) {
+  const tmp1 = String(arg0 || "").trim();
+  const tmp2 = String(arg1 || "").trim();
+  if (tmp1.endsWith("-priority") || tmp2.endsWith("-priority")) {
     return "fast";
   }
-  return undefined;
+  const tmp3 = arg2 || getByokSlot(tmp1);
+  if (tmp3 === 1 || tmp3 === 2) {
+    const tmp4 = getSlotServiceTier(tmp3);
+    if (tmp4) {
+      return tmp4;
+    }
+    const tmp5 = getSlotModel(tmp3);
+    if (tmp5.endsWith("-priority")) {
+      return "fast";
+    }
+  }
+  return getRuntimeConfig().openaiServiceTier || undefined;
 }
 function isOpenAIModel(arg0) {
   if (!arg0) {
@@ -303,7 +313,7 @@ export function handleGetChatMessage(arg0, arg1, arg2) {
     arg1.end();
     return;
   }
-  const tmp16 = getServiceTier(tmp7);
+  const tmp16 = getServiceTier(tmp7, tmp11, tmp10);
   const tmp17 = tmp15 ? "Gemini" : tmp12 ? "OpenAI" : "Anthropic";
   if (EXPOSE_BACKEND_INFO) {
     tmp3 += "\n\nCurrent backend: " + tmp11 + " (" + tmp17 + ").";
@@ -609,7 +619,7 @@ function mapChatCompletionsToolChoice(arg0) {
   }
   return undefined;
 }
-function buildOpenAIResponsesBody({
+export function buildOpenAIResponsesBody({
   systemPrompt: tmp2,
   messages: tmp3,
   tools: tmp4,
@@ -689,6 +699,7 @@ export function buildOpenAIChatCompletionsBody({
   tools: tmp4,
   toolChoice: tmp5,
   resolvedModel: tmp6,
+  serviceTier: tmp7,
   thinkingOptions: tmp12,
   forwardTools: tmp16,
   omitGeminiThinking: tmp18 = false
@@ -702,6 +713,9 @@ export function buildOpenAIChatCompletionsBody({
   const tmp20 = getMaxTokens();
   if (tmp20 > 0) {
     tmp19.max_tokens = tmp20;
+  }
+  if (tmp7) {
+    tmp19.service_tier = tmp7;
   }
   const tmp21 = tmp12?.thinkingEnabled === true;
   if (OPENAI_ENABLE_REASONING && tmp21) {
