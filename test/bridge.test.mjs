@@ -16,7 +16,7 @@ import { applyAnthropicPromptCache, normalizeOpenAIPromptCacheMode, prepareTools
 import { computeCacheHitRate, extractOpenAIResponsesUsage, formatUsageLog, mergeUsage } from "../proxy-scripts/src/handlers/usage-log.js";
 import { parseOpenAISSEChunk, OpenAIStreamProcessor } from "../proxy-scripts/src/handlers/openai-stream.js";
 import { buildAnthropicThinkingPayload, supportsAdaptiveClaudeThinking, getByokSlot, shouldInterceptByokChat, peekRequestedModel } from "../proxy-scripts/src/handlers/byok-slots.js";
-import { wrapEnvelope } from "../proxy-scripts/src/connect.js";
+import { bufferedResponseHeaders, wrapEnvelope } from "../proxy-scripts/src/connect.js";
 import { writeStringField } from "../proxy-scripts/src/proto.js";
 import { buildGatewayCapabilityKey, clearGatewayCapabilityCache, getGatewayCapability, markGatewayCapability, _getGatewayCapabilityCacheSizeForTests } from "../proxy-scripts/src/handlers/gateway-capability.js";
 
@@ -482,6 +482,22 @@ test("gateway URL inference preserves explicit protocol and infers local HTTP", 
   assert.equal(gatewayUrl.ensureGatewayUrl("api.example.com"), "https://api.example.com");
   assert.equal(gatewayUrl.ensureGatewayUrl("http://api.example.com:8080"), "http://api.example.com:8080");
   assert.equal(gatewayUrl.shouldUseHttpGateway("api.example.com:8080"), true);
+});
+
+test("bufferedResponseHeaders strips transfer encoding and stale content length", () => {
+  const headers = bufferedResponseHeaders({
+    "content-type": "application/proto",
+    "Content-Length": "999",
+    "transfer-encoding": "chunked",
+    connection: "keep-alive",
+    "x-request-id": "req-1"
+  }, 12);
+
+  assert.equal(headers["transfer-encoding"], undefined);
+  assert.equal(headers["Content-Length"], undefined);
+  assert.equal(headers.connection, undefined);
+  assert.equal(headers["content-length"], 12);
+  assert.equal(headers["x-request-id"], "req-1");
 });
 
 test("external config importer reads Claude and Codex user config files", () => {

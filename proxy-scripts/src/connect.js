@@ -103,6 +103,12 @@ export function sanitizeUpstreamResponseHeaders(arg0, arg1 = false) {
   return tmp2;
 }
 
+export function bufferedResponseHeaders(arg0, arg1) {
+  const tmp2 = sanitizeUpstreamResponseHeaders(arg0, true);
+  tmp2["content-length"] = arg1;
+  return tmp2;
+}
+
 export function writeConnectStreamErrorHttp1(arg0, arg1, arg2) {
   if (arg0.headersSent || arg0.writableEnded) {
     return;
