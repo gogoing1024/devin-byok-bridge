@@ -484,6 +484,20 @@ test("gateway URL inference preserves explicit protocol and infers local HTTP", 
   assert.equal(gatewayUrl.shouldUseHttpGateway("api.example.com:8080"), true);
 });
 
+test("provider base URL parsing preserves the user input and derives runtime host/path", () => {
+  assert.deepEqual(gatewayUrl.parseProviderBaseUrl("https://modelservice.jdcloud.com/v1", "/messages"), {
+    input: "https://modelservice.jdcloud.com/v1",
+    host: "modelservice.jdcloud.com",
+    apiPath: "/v1/messages"
+  });
+
+  assert.deepEqual(gatewayUrl.parseProviderBaseUrl("https://modelservice.jdcloud.com/anthropic", "/responses"), {
+    input: "https://modelservice.jdcloud.com/anthropic",
+    host: "modelservice.jdcloud.com",
+    apiPath: "/anthropic/responses"
+  });
+});
+
 test("bufferedResponseHeaders strips transfer encoding and stale content length", () => {
   const headers = bufferedResponseHeaders({
     "content-type": "application/proto",
@@ -506,7 +520,7 @@ test("external config importer reads Claude and Codex user config files", () => 
   fs.mkdirSync(path.join(home, ".codex"));
   fs.writeFileSync(path.join(home, ".claude", "settings.json"), JSON.stringify({
     env: {
-      ANTHROPIC_BASE_URL: "https://claude.example.com",
+      ANTHROPIC_BASE_URL: "https://claude.example.com/anthropic",
       ANTHROPIC_AUTH_TOKEN: "sk-claude",
       ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-4-8"
     }
@@ -526,10 +540,12 @@ test("external config importer reads Claude and Codex user config files", () => 
   const codex = readCodexUserConfig(home);
 
   assert.equal(claude.ok, true);
-  assert.equal(claude.host, "claude.example.com");
+  assert.equal(claude.host, "claude.example.com/anthropic");
+  assert.equal(claude.baseUrl, "https://claude.example.com/anthropic");
   assert.equal(claude.model, "claude-opus-4-8");
   assert.equal(codex.ok, true);
   assert.equal(codex.host, "openai.example.com/v1");
+  assert.equal(codex.baseUrl, "https://openai.example.com/v1");
   assert.equal(codex.model, "gpt-5.5");
 });
 
