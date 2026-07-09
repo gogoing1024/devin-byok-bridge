@@ -264,6 +264,58 @@ class SidebarProvider {
       logs: this.logLines.slice(-50)
     });
   }
+  getExtensionPackageJson() {
+    const tmp02 = this.context?.extension?.packageJSON;
+    if (tmp02 && typeof tmp02 === "object") {
+      return tmp02;
+    }
+    try {
+      const tmp1 = path.join(this.context.extensionPath, "package.json");
+      return JSON.parse(fs.readFileSync(tmp1, "utf8"));
+    } catch {
+      return {};
+    }
+  }
+  getInstalledVersion() {
+    const tmp02 = this.getExtensionPackageJson();
+    return typeof tmp02.version === "string" && tmp02.version.trim() ? tmp02.version.trim() : "unknown";
+  }
+  findGitRoot(tmp02) {
+    let tmp1 = tmp02 || this.context.extensionPath || process.cwd();
+    for (let tmp2 = 0; tmp2 < 8; tmp2++) {
+      const tmp3 = path.join(tmp1, ".git");
+      if (fs.existsSync(tmp3)) {
+        return tmp1;
+      }
+      const tmp4 = path.dirname(tmp1);
+      if (tmp4 === tmp1) {
+        break;
+      }
+      tmp1 = tmp4;
+    }
+    return "";
+  }
+  getGitRemoteUrl() {
+    const tmp02 = this.findGitRoot(this.context.extensionPath);
+    if (tmp02) {
+      try {
+        const tmp1 = path.join(tmp02, ".git", "config");
+        const tmp2 = fs.readFileSync(tmp1, "utf8");
+        const tmp3 = tmp2.match(/\[remote "origin"\][\s\S]*?\n\s*url\s*=\s*([^\r\n]+)/);
+        if (tmp3 && tmp3[1]) {
+          return tmp3[1].trim();
+        }
+      } catch {}
+    }
+    const tmp4 = this.getExtensionPackageJson().repository;
+    if (typeof tmp4 === "string") {
+      return tmp4.trim();
+    }
+    if (tmp4 && typeof tmp4.url === "string") {
+      return tmp4.url.trim();
+    }
+    return "未配置";
+  }
   getStoredPatchExtensionPath() {
     let tmp02 = this.context.globalState.get(KEY_PATCH_EXTENSION_PATH);
     if (!tmp02) {
@@ -1911,6 +1963,8 @@ class SidebarProvider {
     const tmp33 = Object.prototype.hasOwnProperty.call(tmp2, "OPENAI_REASONING_EFFORT") ? tmp2.OPENAI_REASONING_EFFORT : "";
     const tmp40 = tmp2.BYOK1_OPENAI_SERVICE_TIER || tmp2.OPENAI_SERVICE_TIER || "";
     const tmp41 = tmp2.BYOK2_OPENAI_SERVICE_TIER || "";
+    const tmp42 = this.getInstalledVersion();
+    const tmp43 = this.getGitRemoteUrl();
     const tmp34 = tmp7 === tmp1.patches.length ? "badge-ok" : "badge-warn";
     const tmp35 = tmp7 === tmp1.patches.length ? "已就绪" : "需安装";
     const tmp37 = tmp2.SYSTEM_PROMPT_OVERRIDE === "true" ? "true" : "false";
@@ -2707,6 +2761,32 @@ input:focus, select:focus {
   color: #f87171;
   border-color: rgba(239, 68, 68, 0.15);
 }
+.plugin-info {
+  display: grid;
+  gap: 8px;
+}
+.plugin-info-row {
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid ${tmp21};
+  border-radius: 6px;
+  padding: 7px 8px;
+}
+.plugin-info-row b {
+  display: block;
+  color: ${tmp16};
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.plugin-info-row code {
+  color: ${tmp15};
+  font-family: ${tmp24};
+  font-size: 10px;
+  line-height: 1.45;
+  word-break: break-all;
+}
 .patch-path {
   margin: 0 0 8px;
   padding: 6px 8px;
@@ -2917,6 +2997,16 @@ input:focus, select:focus {
 
     <!-- TAB 3: System -->
     <div class="tab-content" id="tab-system">
+        <div class="card" style="margin-bottom:12px">
+            <div class="card-head between">
+                <span>插件信息</span>
+                <span class="badge badge-ok">v${esc(tmp42)}</span>
+            </div>
+            <div class="plugin-info">
+                <div class="plugin-info-row"><b>当前安装版本</b><code id="pluginInstalledVersion">v${esc(tmp42)}</code></div>
+                <div class="plugin-info-row"><b>Git 远端地址</b><code id="pluginGitRemote">${esc(tmp43)}</code></div>
+            </div>
+        </div>
         <div class="card" style="margin-bottom:12px">
             <div class="card-head between">
                 <span>补丁管理</span>

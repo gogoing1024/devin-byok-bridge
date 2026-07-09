@@ -150,6 +150,9 @@ class ProxyManager {
     });
     return tmp0;
   }
+  getGatewayCapabilityCachePath() {
+    return path.join(this.ensureUserConfigDir(), "gateway-capability-cache.json");
+  }
   findLegacyEnvCandidates() {
     const tmp0 = [];
     const tmp1 = new Set();
@@ -434,7 +437,8 @@ class ProxyManager {
   }
   resolveEnvForProxySpawn(tmp0) {
     return {
-      ...tmp0
+      ...tmp0,
+      GATEWAY_CAPABILITY_CACHE_PATH: this.getGatewayCapabilityCachePath()
     };
   }
   writeEnvConfig(tmp0) {
@@ -797,12 +801,13 @@ class ProxyManager {
       this.log("警告: 未配置 ANTHROPIC_API_KEY");
       vscode.window.showWarningMessage("未配置 API Key，请先在控制面板中设置");
     }
+    const tmp14 = this.resolveEnvForProxySpawn(tmp4);
     let tmp7 = false;
     this.hybridProcess = (0, child_process_1.spawn)("node", [tmp2], {
       cwd: this.proxyRoot,
       env: {
         ...process.env,
-        ...tmp4,
+        ...tmp14,
         PROXY_DEVICE_ID: this.deviceId,
         PROXY_CLIENT_VERSION: this.clientVersion
       },
@@ -893,12 +898,15 @@ class ProxyManager {
           this.setStartWarning("Inference 端口 " + tmp04 + " 已被占用" + (tmp13 ? "（" + tmp13 + "）" : "") + "，已自动切换到 " + tmp23 + " 并继续启动内联补全代理");
         }
         let tmp12 = false;
+        const tmp14 = this.resolveEnvForProxySpawn({
+          ...tmp4,
+          INFERENCE_PORT: String(tmp03)
+        });
         this.inferenceProcess = (0, child_process_1.spawn)("node", [tmp02], {
           cwd: this.proxyRoot,
           env: {
             ...process.env,
-            ...tmp4,
-            INFERENCE_PORT: String(tmp03),
+            ...tmp14,
             PROXY_DEVICE_ID: this.deviceId,
             PROXY_CLIENT_VERSION: this.clientVersion
           },

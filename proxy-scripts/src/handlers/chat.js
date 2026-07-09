@@ -124,13 +124,13 @@ function createTimingTracker(arg0, tmp1 = {}, tmp2 = null) {
 }
 function logNoToolsCalled(arg0, arg1, arg2) {
   const tmp3 = Array.isArray(arg2) ? arg2.map(arg02 => arg02 && arg02.name).filter(Boolean) : [];
-  const tmp4 = tmp3.length ? "; enabled=" + tmp3.length + " [" + tmp3.join(", ") + "]" : "";
+  const tmp4 = tmp3.length ? "; enabled=" + tmp3.length + " " + formatToolNameList(tmp3) : "";
   console.log("  🔧 No tools called (" + arg0 + " " + arg1 + "; model output did not reach tool-call stage" + tmp4 + ")");
   emitStreamStatus("error", arg0 + " " + arg1 + "; no tool calls emitted");
   emitChatEnd("error", []);
 }
-function sanitizeLogBody(arg0) {
-  return arg0.slice(0, 500).replace(/(?:sk-[a-zA-Z0-9_-]{10,}|Bearer\s+\S+)/g, "[REDACTED]").replace(/(?:key-[a-zA-Z0-9_-]{10,})/g, "[REDACTED]").replace(/(?:"(?:api[_-]?key|token|secret|password|authorization)":\s*"[^"]{6,}")/gi, "\"$1\":\"[REDACTED]\"");
+export function sanitizeLogBody(arg0) {
+  return String(arg0 || "").slice(0, 500).replace(/"((?:api[_-]?key|token|secret|password|authorization))"\s*:\s*"[^"]{6,}"/gi, "\"$1\":\"[REDACTED]\"").replace(/(?:sk-[a-zA-Z0-9_-]{10,}|Bearer\s+[^\s",}]+)/g, "[REDACTED]").replace(/(?:key-[a-zA-Z0-9_-]{10,})/g, "[REDACTED]");
 }
 function buildProviderErrorMessage(arg0, arg1, arg2) {
   const tmp3 = String(arg2 || "").toLowerCase();
@@ -496,6 +496,83 @@ function shouldForwardOpenAITools(arg0, arg1) {
   }
   return true;
 }
+function splitToolFilterEnv(...names) {
+  const values = [];
+  for (const name of names) {
+    const raw = process.env[name];
+    if (!raw) {
+      continue;
+    }
+    values.push(...String(raw).split(/[,\s;]+/).map(arg0 => arg0.trim()).filter(Boolean));
+  }
+  return values;
+}
+function matchesToolPattern(name, patterns, prefixMode = false) {
+  const normalized = String(name || "").trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  for (const pattern of patterns) {
+    const candidate = String(pattern || "").trim().toLowerCase();
+    if (!candidate) {
+      continue;
+    }
+    if (prefixMode || candidate.endsWith("*")) {
+      const prefix = candidate.replace(/\*+$/g, "");
+      if (prefix && normalized.startsWith(prefix)) {
+        return true;
+      }
+      continue;
+    }
+    if (normalized === candidate) {
+      return true;
+    }
+  }
+  return false;
+}
+function getToolFilterConfig() {
+  const allow = splitToolFilterEnv("BYOK_TOOL_ALLOWLIST", "TOOL_ALLOWLIST");
+  const deny = splitToolFilterEnv("BYOK_TOOL_DENYLIST", "TOOL_DENYLIST");
+  const allowPrefixes = splitToolFilterEnv("BYOK_TOOL_ALLOW_PREFIXES", "TOOL_ALLOW_PREFIXES");
+  const denyPrefixes = splitToolFilterEnv("BYOK_TOOL_DENY_PREFIXES", "TOOL_DENY_PREFIXES");
+  return {
+    allow,
+    deny,
+    allowPrefixes,
+    denyPrefixes,
+    active: allow.length > 0 || deny.length > 0 || allowPrefixes.length > 0 || denyPrefixes.length > 0
+  };
+}
+export function filterForwardedTools(tools = []) {
+  if (!Array.isArray(tools) || tools.length === 0) {
+    return [];
+  }
+  const config = getToolFilterConfig();
+  if (!config.active) {
+    return tools;
+  }
+  const hasAllowRules = config.allow.length > 0 || config.allowPrefixes.length > 0;
+  return tools.filter(tool => {
+    const name = tool?.name || "";
+    const allowed = !hasAllowRules || matchesToolPattern(name, config.allow) || matchesToolPattern(name, config.allowPrefixes, true);
+    const denied = matchesToolPattern(name, config.deny) || matchesToolPattern(name, config.denyPrefixes, true);
+    return allowed && !denied;
+  });
+}
+function formatToolNameList(toolsOrNames = [], limit = 12) {
+  const names = toolsOrNames.map(arg0 => typeof arg0 === "string" ? arg0 : arg0?.name).filter(Boolean);
+  if (names.length === 0) {
+    return "[]";
+  }
+  const shown = names.slice(0, limit);
+  const suffix = names.length > limit ? ", ... +" + (names.length - limit) + " more" : "";
+  return "[" + shown.join(", ") + suffix + "]";
+}
+function describeToolFilter(originalTools = [], forwardedTools = []) {
+  const originalCount = Array.isArray(originalTools) ? originalTools.length : 0;
+  const forwardedCount = Array.isArray(forwardedTools) ? forwardedTools.length : 0;
+  return originalCount !== forwardedCount ? " filtered=" + originalCount + "→" + forwardedCount : "";
+}
 function getForwardedToolChoice(arg0, arg1, arg2) {
   if (!arg1 || !arg0 || arg0.length === 0) {
     return undefined;
@@ -618,6 +695,13 @@ function mapChatCompletionsToolChoice(arg0) {
     };
   }
   return undefined;
+}
+export function splitSseFrames(buffer) {
+  const parts = String(buffer || "").split(/\r?\n\r?\n/);
+  return {
+    frames: parts.slice(0, -1),
+    remainder: parts[parts.length - 1] || ""
+  };
 }
 export function buildOpenAIResponsesBody({
   systemPrompt: tmp2,
@@ -820,9 +904,9 @@ function attachOpenAISseStream(arg02, {
     }
     fn3();
     sseBuffer += tmp1.write(arg03);
-    const tmp110 = sseBuffer.split("\n\n");
-    sseBuffer = tmp110.pop();
-    for (const tmp02 of tmp110) {
+    const tmp110 = splitSseFrames(sseBuffer);
+    sseBuffer = tmp110.remainder;
+    for (const tmp02 of tmp110.frames) {
       processPart(tmp02);
     }
   });
@@ -878,7 +962,8 @@ function streamAnthropic(arg0, arg1, {
   byokSlot: tmp11 = null
 }) {
   const tmp12 = getProviderConfig(tmp11).anthropic;
-  const tmp13 = getForwardedToolChoice(tmp4, tmp5, "Anthropic");
+  const forwardedTools = filterForwardedTools(tmp4);
+  const tmp13 = getForwardedToolChoice(forwardedTools, tmp5, "Anthropic");
   const tmp19 = tmp12.useHttp ? http : https;
   const tmp20 = tmp12.parsed.port !== 443 ? tmp12.parsed.port : tmp12.useHttp ? 80 : 443;
   const tmp37 = tmp12.useHttp ? "http" : "https";
@@ -902,8 +987,8 @@ function streamAnthropic(arg0, arg1, {
       stream: true,
       max_tokens: getMaxTokens()
     };
-    if (tmp4 && tmp4.length > 0) {
-      tmp14.tools = tmp4;
+    if (forwardedTools && forwardedTools.length > 0) {
+      tmp14.tools = forwardedTools;
       if (tmp13) {
         tmp14.tool_choice = tmp13;
       }
@@ -928,6 +1013,9 @@ function streamAnthropic(arg0, arg1, {
   };
   const tmp15 = tmp14ThinkingLabel(buildPayload());
   console.log("  🧩 Anthropic/Sub2API thinking: " + tmp15);
+  if (tmp4 && tmp4.length > 0) {
+    console.log("  🔧 Anthropic tools enabled: " + forwardedTools.length + describeToolFilter(tmp4, forwardedTools) + " " + formatToolNameList(forwardedTools));
+  }
   arg1.writeHead(200, streamHeaders());
   const processor = new AnthropicStreamProcessor(tmp7, tmp6, tmp9);
   let tmp17;
@@ -1043,9 +1131,9 @@ function streamAnthropic(arg0, arg1, {
         }
         fn2();
         sseBuffer += arg03;
-        const tmp110 = sseBuffer.split("\n\n");
-        sseBuffer = tmp110.pop();
-        for (const tmp02 of tmp110) {
+        const tmp110 = splitSseFrames(sseBuffer);
+        sseBuffer = tmp110.remainder;
+        for (const tmp02 of tmp110.frames) {
           processPart(tmp02);
         }
       });
@@ -1126,11 +1214,12 @@ function streamOpenAI(arg0, arg1, {
 }) {
   const tmp14 = getProviderConfig(tmp13).openai;
   const tmp15 = getPromptCacheConfig();
-  const tmp16 = shouldForwardOpenAITools(tmp9, tmp4);
+  const forwardedTools = filterForwardedTools(tmp4);
+  const tmp16 = shouldForwardOpenAITools(tmp9, forwardedTools);
   const tmp30 = {
     systemPrompt: tmp2,
     messages: tmp3,
-    tools: tmp4,
+    tools: forwardedTools,
     toolChoice: tmp5,
     resolvedModel: tmp6,
     serviceTier: tmp7,
@@ -1145,10 +1234,10 @@ function streamOpenAI(arg0, arg1, {
     omitGeminiThinking: true
   }) : null;
   console.log("  🧩 OpenAI/Sub2API reasoning: " + (isGeminiModel(tmp6) ? tmp31.thinking_config ? usesGeminiThinkingLevel(tmp6) ? "gemini level=" + (tmp31.thinking_config.thinking_level || "?") : "gemini budget=" + (tmp31.thinking_config.thinking_budget || "?") : "off" : tmp31.reasoning ? tmp31.reasoning.effort || "default" : tmp32.reasoning_effort || "off"));
-  if (tmp16 && tmp4 && tmp4.length > 0) {
-    console.log("  🔧 OpenAI tools enabled: " + tmp4.length + " (initiator=" + (tmp9 || "unknown") + ")\n    → [" + tmp4.map(arg02 => arg02.name).join(", ") + "]");
+  if (tmp16 && forwardedTools && forwardedTools.length > 0) {
+    console.log("  🔧 OpenAI tools enabled: " + forwardedTools.length + describeToolFilter(tmp4, forwardedTools) + " (initiator=" + (tmp9 || "unknown") + ") " + formatToolNameList(forwardedTools));
   } else if (tmp4 && tmp4.length > 0) {
-    console.log("  🔧 OpenAI tools disabled for user-initiated turn: " + tmp4.length + " available");
+    console.log("  🔧 OpenAI tools disabled: " + tmp4.length + describeToolFilter(tmp4, forwardedTools) + " available");
   }
   const tmp33 = [];
   const tmp37 = tmp14.useHttp ? "http" : "https";
@@ -1254,7 +1343,7 @@ function streamOpenAI(arg0, arg1, {
       return;
     }
     tmp25 = true;
-    logNoToolsCalled("OpenAI", arg02, tmp16 ? tmp4 : []);
+    logNoToolsCalled("OpenAI", arg02, tmp16 ? forwardedTools : []);
   };
   const tmp27 = tmp14.useHttp ? http : https;
   const tmp28 = tmp38;
@@ -1269,8 +1358,8 @@ function streamOpenAI(arg0, arg1, {
       console.log("  ↩️  OpenAI gateway rejected /v1/responses — falling back to /v1/chat/completions");
     }
     processor = tmp02.mode === "chat" ? new ChatCompletionsStreamProcessor(tmp8, tmp6, tmp11) : new OpenAIStreamProcessor(tmp8, tmp6, tmp11);
-    if (tmp16 && tmp4) {
-      processor.setAllowedTools(tmp4.map(arg02 => arg02.name));
+    if (tmp16 && forwardedTools) {
+      processor.setAllowedTools(forwardedTools.map(arg02 => arg02.name));
     }
     const tmp03 = JSON.stringify(tmp02.body);
     const tmp04 = tmp02.usageMeta || {
@@ -1281,7 +1370,7 @@ function streamOpenAI(arg0, arg1, {
     };
     console.log("  → OpenAI " + (tmp14.useHttp ? "http" : "https") + "://" + tmp14.parsed.hostname + ":" + tmp28 + tmp02.path + " model=" + tmp6 + " key=" + tmp29 + " cache=" + tmp04.cacheStatus + " mode=" + tmp04.mode);
     if (tmp10) {
-      tmp10.mark(tmp34 === 1 ? "upstream_request_start" : "upstream_fallback_start", "bytes=" + Buffer.byteLength(tmp03) + " tools=" + (tmp16 && tmp4 ? tmp4.length : 0) + " cache=" + tmp04.cacheStatus + " mode=" + tmp04.mode);
+      tmp10.mark(tmp34 === 1 ? "upstream_request_start" : "upstream_fallback_start", "bytes=" + Buffer.byteLength(tmp03) + " tools=" + (tmp16 && forwardedTools ? forwardedTools.length : 0) + " cache=" + tmp04.cacheStatus + " mode=" + tmp04.mode);
     }
     tmp23 = tmp27.request({
       hostname: tmp14.parsed.hostname,
