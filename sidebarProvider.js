@@ -1934,7 +1934,7 @@ class SidebarProvider {
     const tmp10 = getWebviewNonce();
     const tmp11 = this.view?.webview.cspSource ?? "";
     const tmp12 = this.view.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "media", "sidebar.js"));
-    const tmp42 = this.view.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "media", "modelPickerCore.js"));
+    const tmp44 = this.view.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "media", "modelPickerCore.js"));
     const tmp13 = "var(--vscode-button-background,#0d9488)";
     const tmp14 = "var(--vscode-button-hoverBackground,#0f766e)";
     const tmp15 = "var(--vscode-textLink-foreground,#5eead4)";
@@ -3336,7 +3336,7 @@ select.choice-source-select {
     </div>
 </div>
 
-<script nonce="${tmp10}" src="${tmp42}"></script>
+<script nonce="${tmp10}" src="${tmp44}"></script>
 <script nonce="${tmp10}" src="${tmp12}"></script>
 </body>
 </html>`;
