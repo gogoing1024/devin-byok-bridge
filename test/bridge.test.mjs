@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 import { sanitizeAnthropicMessages, parseGetChatMessageRequest } from "../proxy-scripts/src/handlers/parse-request.js";
 import { applySystemPromptOverride, clearSystemPromptCache } from "../proxy-scripts/src/handlers/system-prompt.js";
-import { shouldFallbackToChatCompletions, toChatCompletionsMessages, buildOpenAIResponsesBody, buildOpenAIChatCompletionsBody, requiresConfiguredDefaultModel, toInjectedTailMessage } from "../proxy-scripts/src/handlers/chat.js";
+import { shouldFallbackToChatCompletions, toChatCompletionsMessages, buildOpenAIResponsesBody, buildOpenAIChatCompletionsBody, requiresConfiguredDefaultModel, toInjectedTailMessage, splitSseFrames, filterForwardedTools, sanitizeLogBody } from "../proxy-scripts/src/handlers/chat.js";
 import { setRuntimeConfig, getSlotServiceTier, handleConfigRequest } from "../proxy-scripts/src/handlers/models.js";
 import { applyAnthropicPromptCache, normalizeOpenAIPromptCacheMode, prepareToolsForPromptCache, shouldRetryWithoutPromptCache, sortToolsForStablePrefix } from "../proxy-scripts/src/handlers/prompt-cache.js";
 import { computeCacheHitRate, extractOpenAIResponsesUsage, formatUsageLog, mergeUsage } from "../proxy-scripts/src/handlers/usage-log.js";
@@ -18,7 +18,7 @@ import { parseOpenAISSEChunk, OpenAIStreamProcessor } from "../proxy-scripts/src
 import { buildAnthropicThinkingPayload, supportsAdaptiveClaudeThinking, getByokSlot, shouldInterceptByokChat, peekRequestedModel } from "../proxy-scripts/src/handlers/byok-slots.js";
 import { bufferedResponseHeaders, wrapEnvelope } from "../proxy-scripts/src/connect.js";
 import { writeStringField } from "../proxy-scripts/src/proto.js";
-import { buildGatewayCapabilityKey, clearGatewayCapabilityCache, getGatewayCapability, markGatewayCapability, _getGatewayCapabilityCacheSizeForTests } from "../proxy-scripts/src/handlers/gateway-capability.js";
+import { buildGatewayCapabilityKey, clearGatewayCapabilityCache, getGatewayCapability, markGatewayCapability, _getGatewayCapabilityCacheSizeForTests, _resetGatewayCapabilityMemoryForTests, _setGatewayCapabilityCachePathForTests } from "../proxy-scripts/src/handlers/gateway-capability.js";
 
 const require = createRequire(import.meta.url);
 const { readClaudeUserConfig, readCodexUserConfig } = require("../externalConfigImporter.js");
@@ -139,6 +139,63 @@ test("toInjectedTailMessage marks runtime injections as volatile tail", () => {
     content: "hello",
     _volatileTail: true
   });
+});
+
+test("splitSseFrames supports LF and CRLF separators", () => {
+  assert.deepEqual(splitSseFrames("data: one\n\ndata: two\r\n\r\ndata: partial"), {
+    frames: ["data: one", "data: two"],
+    remainder: "data: partial"
+  });
+  assert.deepEqual(splitSseFrames("data: one\r\n\r\n"), {
+    frames: ["data: one"],
+    remainder: ""
+  });
+});
+
+test("filterForwardedTools supports allow and deny filters", () => {
+  const oldAllow = process.env.TOOL_ALLOWLIST;
+  const oldDenyPrefixes = process.env.TOOL_DENY_PREFIXES;
+  try {
+    process.env.TOOL_ALLOWLIST = "read_file,edit,mcp1_*";
+    process.env.TOOL_DENY_PREFIXES = "mcp3_";
+    const tools = [{
+      name: "read_file"
+    }, {
+      name: "run_command"
+    }, {
+      name: "mcp1_fetch-doc"
+    }, {
+      name: "mcp3_get_script_source"
+    }];
+    assert.deepEqual(filterForwardedTools(tools).map(tool => tool.name), ["read_file", "mcp1_fetch-doc"]);
+  } finally {
+    if (oldAllow === undefined) {
+      delete process.env.TOOL_ALLOWLIST;
+    } else {
+      process.env.TOOL_ALLOWLIST = oldAllow;
+    }
+    if (oldDenyPrefixes === undefined) {
+      delete process.env.TOOL_DENY_PREFIXES;
+    } else {
+      process.env.TOOL_DENY_PREFIXES = oldDenyPrefixes;
+    }
+  }
+});
+
+test("sanitizeLogBody redacts structured secrets", () => {
+  const body = JSON.stringify({
+    api_key: "sk-1234567890abcdef",
+    token: "Bearer abcdefghijklmnop",
+    nested: {
+      password: "secret-value"
+    },
+    detail: "ok"
+  });
+  const sanitized = sanitizeLogBody(body);
+  assert.match(sanitized, /"api_key":"\[REDACTED\]"/);
+  assert.match(sanitized, /"token":"\[REDACTED\]"/);
+  assert.match(sanitized, /"password":"\[REDACTED\]"/);
+  assert.doesNotMatch(sanitized, /1234567890abcdef|abcdefghijklmnop|secret-value/);
 });
 
 test("normalizeOpenAIPromptCacheMode normalizes invalid values to observe", () => {
@@ -455,6 +512,7 @@ test("Claude 4 regional aliases use adaptive thinking", () => {
 });
 
 test("gateway capability cache uses detailed keys and can be cleared", () => {
+  _setGatewayCapabilityCachePathForTests("");
   clearGatewayCapabilityCache();
   const key = buildGatewayCapabilityKey({
     protocol: "https",
@@ -474,6 +532,37 @@ test("gateway capability cache uses detailed keys and can be cleared", () => {
   assert.equal(_getGatewayCapabilityCacheSizeForTests(), 1);
   clearGatewayCapabilityCache();
   assert.equal(getGatewayCapability(key), null);
+});
+
+test("gateway capability cache can persist to disk", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "byok-gateway-cache-"));
+  const cachePath = path.join(dir, "capabilities.json");
+  const key = buildGatewayCapabilityKey({
+    protocol: "http",
+    host: "127.0.0.1",
+    port: 8787,
+    apiPath: "/v1/responses",
+    providerKind: "openai",
+    slot: "default"
+  });
+  try {
+    _setGatewayCapabilityCachePathForTests(cachePath);
+    markGatewayCapability(key, {
+      preferChatCompletions: true,
+      reason: "responses rejected: HTTP 400"
+    });
+    assert.equal(fs.existsSync(cachePath), true);
+
+    _resetGatewayCapabilityMemoryForTests();
+    assert.equal(getGatewayCapability(key).preferChatCompletions, true);
+    assert.equal(getGatewayCapability(key).reason, "responses rejected: HTTP 400");
+  } finally {
+    _setGatewayCapabilityCachePathForTests("");
+    fs.rmSync(dir, {
+      recursive: true,
+      force: true
+    });
+  }
 });
 
 test("gateway URL inference preserves explicit protocol and infers local HTTP", () => {
