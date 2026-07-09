@@ -243,16 +243,20 @@ function resolveSlotThinkingEffort(arg0, arg1) {
   }
   return arg1.openaiReasoningEffort || "";
 }
-function buildThinkingOptions(arg0, arg1, tmp2 = null) {
+export function buildThinkingOptions(arg0, arg1, tmp2 = null) {
   const tmp3 = getRuntimeConfig();
   const tmp4 = isThinkingModel(arg0);
   const tmp5 = resolveSlotThinkingEffort(tmp2, tmp3);
   const tmp6 = isClaudeModel(arg0);
   const tmp7 = isGeminiModel(arg0);
   const tmp8 = isOpenAIModel(arg0);
+  const tmp12 = tmp5 === "off";
   let tmp9 = false;
   let tmp10 = "";
-  if (arg1 || tmp8) {
+  if (tmp12) {
+    tmp9 = false;
+    tmp10 = "";
+  } else if (arg1 || tmp8) {
     tmp9 = tmp4 || tmp3.openaiThinkingEnabled === true || !!tmp5;
     tmp10 = tmp9 ? tmp5 || tmp3.openaiReasoningEffort || "" : "";
   } else if (tmp7) {

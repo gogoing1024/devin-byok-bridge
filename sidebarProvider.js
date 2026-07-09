@@ -1313,10 +1313,10 @@ class SidebarProvider {
     if (!["", "low", "medium", "high", "xhigh", "max"].includes(tmp2.OPENAI_REASONING_EFFORT || "")) {
       tmp2.OPENAI_REASONING_EFFORT = "";
     }
-    if (!["", "minimal", "low", "medium", "high", "xhigh", "max"].includes(tmp2.BYOK1_THINKING_EFFORT || "")) {
+    if (!["", "off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(tmp2.BYOK1_THINKING_EFFORT || "")) {
       tmp2.BYOK1_THINKING_EFFORT = "";
     }
-    if (!["", "minimal", "low", "medium", "high", "xhigh", "max"].includes(tmp2.BYOK2_THINKING_EFFORT || "")) {
+    if (!["", "off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(tmp2.BYOK2_THINKING_EFFORT || "")) {
       tmp2.BYOK2_THINKING_EFFORT = "";
     }
     if (!["true", "false"].includes(tmp2.OPENAI_THINKING_ENABLED || "false")) {

@@ -170,9 +170,9 @@
     return null;
   }
   const tmp20 = {
-    claude: [["", "关闭 · 不启用思考"], ["low", "低 · budget 5k / adaptive"], ["medium", "中 · 推荐平衡"], ["high", "高 · 复杂分析/代码"], ["xhigh", "极高 · Opus 4.7/4.8"], ["max", "Max · Claude 最深思考"]],
-    gpt: [["", "关闭 · 不启用 reasoning"], ["low", "低 · reasoning.effort=low"], ["medium", "中 · reasoning.effort=medium"], ["high", "高 · reasoning.effort=high"], ["xhigh", "极高 · reasoning.effort=xhigh"]],
-    gemini: [["", "默认 · medium（API 默认，不覆盖）"], ["minimal", "Minimal · 最低思考 / 最低延迟"], ["low", "Low · 速度优先"], ["medium", "Medium · 推荐平衡"], ["high", "High · 最深推理"]]
+    claude: [["", "默认 · 按模型/槽位决定"], ["off", "关闭 · 不启用思考"], ["low", "低 · budget 5k / adaptive"], ["medium", "中 · 推荐平衡"], ["high", "高 · 复杂分析/代码"], ["xhigh", "极高 · Opus 4.7/4.8"], ["max", "Max · Claude 最深思考"]],
+    gpt: [["", "默认 · 不覆盖 reasoning"], ["off", "关闭 · 不启用 reasoning"], ["low", "低 · reasoning.effort=low"], ["medium", "中 · reasoning.effort=medium"], ["high", "高 · reasoning.effort=high"], ["xhigh", "极高 · reasoning.effort=xhigh"]],
+    gemini: [["", "默认 · 按模型/槽位决定"], ["off", "关闭 · 不启用 thinking"], ["minimal", "Minimal · 最低思考 / 最低延迟"], ["low", "Low · 速度优先"], ["medium", "Medium · 推荐平衡"], ["high", "High · 最深推理"]]
   };
   const tmp21 = new Set(["cfgByok1Host", "cfgByok1Key", "cfgByok1Model", "cfgByok1ThinkingEffort", "cfgByok1ServiceTier", "cfgByok2Host", "cfgByok2Key", "cfgByok2Model", "cfgByok2ThinkingEffort", "cfgByok2ServiceTier", "cfgHybridPort", "cfgInferencePort", "cfgAnthropicPath", "cfgOpenaiPath", "cfgMaxTokens", "cfgCompletionTimeoutMs", "cfgSysPromptOverride", "cfgSysPromptPath"]);
   let tmp22 = null;
@@ -801,6 +801,7 @@
   function fn27() {
     const tmp02 = fn26(1);
     const tmp12 = fn26(2);
+    const tmp22 = tmp02.BYOK1_THINKING_EFFORT === "off" ? "" : tmp02.BYOK1_THINKING_EFFORT || "";
     return {
       ...tmp02,
       ...tmp12,
@@ -816,8 +817,8 @@
       COMPLETION_TIMEOUT_MS: (fn4("cfgCompletionTimeoutMs") || {}).value || "12000",
       HYBRID_PORT: (fn4("cfgHybridPort") || {}).value || "3006",
       INFERENCE_PORT: (fn4("cfgInferencePort") || {}).value || "3001",
-      OPENAI_REASONING_EFFORT: tmp02.BYOK1_THINKING_EFFORT || "",
-      OPENAI_THINKING_ENABLED: tmp02.BYOK1_THINKING_EFFORT ? "true" : "",
+      OPENAI_REASONING_EFFORT: tmp22,
+      OPENAI_THINKING_ENABLED: tmp22 ? "true" : "",
       SYSTEM_PROMPT_OVERRIDE: (fn4("cfgSysPromptOverride") || {}).value === "true" ? "true" : "false",
       SYSTEM_PROMPT_PATH: (fn4("cfgSysPromptPath") || {}).value || ""
     };
