@@ -11,7 +11,7 @@ Devin Desktop BYOK 桥接插件 — 使用自己的 API Key 连接 Claude / GPT 
 - 插件 ID：`devin-byok-bridge`
 - 显示名：Devin BYOK Bridge
 - 维护者 / Publisher：`ycx932436`
-- 版本：2.6.0
+- 版本：2.6.1
 - 仓库：https://github.com/ycx932436/devin-byok-bridge
 
 ## 安装
@@ -62,13 +62,14 @@ Devin Desktop BYOK 桥接插件 — 使用自己的 API Key 连接 Claude / GPT 
 | 中 | `medium` | budget 10k / adaptive | `reasoning.effort=medium` | `thinking_level=medium`（默认） |
 | 高 | `high` | budget 20k / adaptive | `reasoning.effort=high` | `thinking_level=high` |
 | 极高 | `xhigh` | budget 32k / adaptive | `reasoning.effort=xhigh` | 映射为 `high` |
-| Max | `max` | adaptive `effort=max` | — | 映射为 `high` |
+| Max | `max` | adaptive `effort=max` | 仅 `gpt-5.6*` 使用 `reasoning.effort=max`；其他 GPT 映射为 `xhigh` | 映射为 `high` |
 
 说明：
 
 - **Claude 新模型**（如 `claude-opus-4-8`、`claude-opus-4-7`、`claude-opus-4-6`、`claude-sonnet-4-6`）使用 `thinking: { type: "adaptive" }` + `output_config.effort`
 - **Claude 旧模型** 使用 `thinking: { type: "enabled", budget_tokens: N }`
 - **GPT** 默认走 OpenAI Responses API（`/v1/responses`），通过 `reasoning.effort` 控制；网关不支持时会自动回退到 `/v1/chat/completions`
+- **GPT-5.6** 可额外设置 `OPENAI_REASONING_MODE=standard|pro`；该字段仅发送到 Responses API。`OPENAI_SERVICE_TIER` 支持 `priority`（OpenAI 官方优先处理）或 `fast`（兼容网关快速模式）
 - **Gemini 3.x**（以 **3.5 Flash** 为准）使用 `thinking_config.thinking_level`（`minimal` / `low` / `medium` / `high`），**不要**与 `thinking_budget` 同传
 - **Gemini Chat Completions 回退** 会尽力传递 `thinking_config`；若网关不支持该扩展字段，会再降级为不带 thinking 的 Chat Completions
 - **Gemini 2.5** 等旧模型仍回退为 `thinking_budget` 数值映射
@@ -137,7 +138,8 @@ BYOK1_ANTHROPIC_API_HOST=
 BYOK1_ANTHROPIC_API_KEY=
 BYOK1_OPENAI_API_HOST=
 BYOK1_OPENAI_API_KEY=
-BYOK1_OPENAI_SERVICE_TIER=fast        # 可选：fast 会在 GPT 请求体写入 service_tier=fast
+BYOK1_OPENAI_SERVICE_TIER=priority # 可选：priority（OpenAI 官方）或 fast（兼容网关）
+BYOK1_OPENAI_REASONING_MODE=        # 仅 GPT-5.6：standard | pro
 BYOK1_MODEL=
 BYOK1_THINKING_EFFORT=        # low | medium | high | xhigh | max
 ```
@@ -149,7 +151,8 @@ BYOK2_ANTHROPIC_API_HOST=
 BYOK2_ANTHROPIC_API_KEY=
 BYOK2_OPENAI_API_HOST=
 BYOK2_OPENAI_API_KEY=
-BYOK2_OPENAI_SERVICE_TIER=fast
+BYOK2_OPENAI_SERVICE_TIER=priority # 可选：priority（OpenAI 官方）或 fast（兼容网关）
+BYOK2_OPENAI_REASONING_MODE=        # 仅 GPT-5.6：standard | pro
 BYOK2_MODEL=
 BYOK2_THINKING_EFFORT=
 ```
@@ -161,7 +164,8 @@ ANTHROPIC_API_HOST=
 ANTHROPIC_API_KEY=
 OPENAI_API_HOST=
 OPENAI_API_KEY=
-OPENAI_SERVICE_TIER=fast       # 镜像 BYOK1_OPENAI_SERVICE_TIER
+OPENAI_SERVICE_TIER=priority  # 镜像 BYOK1_OPENAI_SERVICE_TIER
+OPENAI_REASONING_MODE=         # 镜像 BYOK1_OPENAI_REASONING_MODE，仅 GPT-5.6
 DEFAULT_MODEL=
 OPENAI_REASONING_EFFORT=      # 镜像 BYOK1_THINKING_EFFORT
 OPENAI_THINKING_ENABLED=

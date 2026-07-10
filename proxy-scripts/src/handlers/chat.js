@@ -8,7 +8,7 @@ import { AnthropicStreamProcessor, parseSSEChunk } from "./anthropic-stream.js";
 import { OpenAIStreamProcessor, ChatCompletionsStreamProcessor, parseOpenAISSEChunk } from "./openai-stream.js";
 import { wrapEnvelope, endOfStreamEnvelope, streamHeaders } from "../connect.js";
 import { getByokSlot, buildAnthropicThinkingPayload, buildGeminiThinkingPayload, thinkingEffortToAnthropicBudget, thinkingEffortToGeminiBudget, thinkingEffortToOpenAIReasoningEffort, detectModelProvider, usesGeminiThinkingLevel, sanitizeGeminiThinkingEffort } from "./byok-slots.js";
-import { getProviderConfig, getRuntimeConfig, getSlotModel, getSlotThinkingEffort, getSlotServiceTier } from "./models.js";
+import { getProviderConfig, getRuntimeConfig, getSlotModel, getSlotThinkingEffort, getSlotServiceTier, getSlotReasoningMode } from "./models.js";
 import { buildTextDelta } from "./build-response.js";
 import { emitChatStart, emitChatEnd, emitAIText, emitToolCall, emitStreamStatus, consumeInjectedMessages, getActiveMonitorTarget } from "../ws-bridge.js";
 import { buildGatewayCapabilityKey, getGatewayCapability, markGatewayCapability } from "./gateway-capability.js";
@@ -250,14 +250,15 @@ export function buildThinkingOptions(arg0, arg1, tmp2 = null) {
   const tmp6 = isClaudeModel(arg0);
   const tmp7 = isGeminiModel(arg0);
   const tmp8 = isOpenAIModel(arg0);
-  const tmp12 = tmp5 === "off";
+  const tmpOff = tmp5 === "off";
+  const tmp12 = tmp2 === 1 || tmp2 === 2 ? getSlotReasoningMode(tmp2) : tmp3.openaiReasoningMode || "";
   let tmp9 = false;
   let tmp10 = "";
-  if (tmp12) {
+  if (tmpOff) {
     tmp9 = false;
     tmp10 = "";
   } else if (arg1 || tmp8) {
-    tmp9 = tmp4 || tmp3.openaiThinkingEnabled === true || !!tmp5;
+    tmp9 = tmp4 || tmp3.openaiThinkingEnabled === true || !!tmp5 || !!tmp12;
     tmp10 = tmp9 ? tmp5 || tmp3.openaiReasoningEffort || "" : "";
   } else if (tmp7) {
     tmp9 = !!sanitizeGeminiThinkingEffort(tmp5) || tmp4 || tmp2 === 2;
@@ -275,6 +276,9 @@ export function buildThinkingOptions(arg0, arg1, tmp2 = null) {
     thinkingBudget: tmp9 ? (tmp7 ? usesGeminiThinkingLevel(arg0) ? 0 : thinkingEffortToGeminiBudget(tmp10) : thinkingEffortToAnthropicBudget(tmp10)) || (tmp7 ? 8192 : 10000) : 0,
     provider: tmp7 ? "gemini" : tmp8 || arg1 ? "gpt" : tmp6 ? "claude" : detectModelProvider(arg0) || "claude"
   };
+  if (tmp8 || arg1) {
+    tmp11.reasoningMode = tmp12;
+  }
   return tmp11;
 }
 export function handleGetChatMessage(arg0, arg1, arg2) {
@@ -752,7 +756,10 @@ export function buildOpenAIResponsesBody({
       };
       tmp19.reasoning = tmp02;
       if (tmp12?.reasoningEffort) {
-        tmp19.reasoning.effort = thinkingEffortToOpenAIReasoningEffort(tmp12.reasoningEffort);
+        tmp19.reasoning.effort = thinkingEffortToOpenAIReasoningEffort(tmp12.reasoningEffort, tmp6);
+      }
+      if (/^gpt-5\.6(?:-|$)/i.test(tmp6) && tmp12?.reasoningMode) {
+        tmp19.reasoning.mode = tmp12.reasoningMode;
       }
     }
   }
@@ -825,7 +832,7 @@ export function buildOpenAIChatCompletionsBody({
         }
       }
     } else {
-      const tmp02 = thinkingEffortToOpenAIReasoningEffort(tmp12?.reasoningEffort);
+      const tmp02 = thinkingEffortToOpenAIReasoningEffort(tmp12?.reasoningEffort, tmp6);
       if (tmp02) {
         tmp19.reasoning_effort = tmp02;
       }

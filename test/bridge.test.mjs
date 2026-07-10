@@ -11,11 +11,11 @@ import { fileURLToPath } from "node:url";
 import { sanitizeAnthropicMessages, parseGetChatMessageRequest } from "../proxy-scripts/src/handlers/parse-request.js";
 import { applySystemPromptOverride, clearSystemPromptCache } from "../proxy-scripts/src/handlers/system-prompt.js";
 import { shouldFallbackToChatCompletions, toChatCompletionsMessages, buildOpenAIResponsesBody, buildOpenAIChatCompletionsBody, requiresConfiguredDefaultModel, toInjectedTailMessage, splitSseFrames, filterForwardedTools, sanitizeLogBody, buildThinkingOptions } from "../proxy-scripts/src/handlers/chat.js";
-import { setRuntimeConfig, getSlotServiceTier, handleConfigRequest } from "../proxy-scripts/src/handlers/models.js";
+import { setRuntimeConfig, getSlotServiceTier, getSlotReasoningMode, handleConfigRequest } from "../proxy-scripts/src/handlers/models.js";
 import { applyAnthropicPromptCache, normalizeOpenAIPromptCacheMode, prepareToolsForPromptCache, shouldRetryWithoutPromptCache, sortToolsForStablePrefix } from "../proxy-scripts/src/handlers/prompt-cache.js";
 import { computeCacheHitRate, extractOpenAIResponsesUsage, formatUsageLog, mergeUsage } from "../proxy-scripts/src/handlers/usage-log.js";
 import { parseOpenAISSEChunk, OpenAIStreamProcessor } from "../proxy-scripts/src/handlers/openai-stream.js";
-import { buildAnthropicThinkingPayload, supportsAdaptiveClaudeThinking, getByokSlot, shouldInterceptByokChat, peekRequestedModel } from "../proxy-scripts/src/handlers/byok-slots.js";
+import { buildAnthropicThinkingPayload, supportsAdaptiveClaudeThinking, getByokSlot, shouldInterceptByokChat, peekRequestedModel, thinkingEffortToOpenAIReasoningEffort } from "../proxy-scripts/src/handlers/byok-slots.js";
 import { bufferedResponseHeaders, wrapEnvelope } from "../proxy-scripts/src/connect.js";
 import { writeStringField } from "../proxy-scripts/src/proto.js";
 import { buildGatewayCapabilityKey, clearGatewayCapabilityCache, getGatewayCapability, markGatewayCapability, _getGatewayCapabilityCacheSizeForTests, _resetGatewayCapabilityMemoryForTests, _setGatewayCapabilityCachePathForTests } from "../proxy-scripts/src/handlers/gateway-capability.js";
@@ -485,6 +485,66 @@ test("runtime OpenAI service tier config is sanitized and slot-aware", () => {
     OPENAI_SERVICE_TIER: "",
     BYOK1_OPENAI_SERVICE_TIER: "",
     BYOK2_OPENAI_SERVICE_TIER: ""
+  });
+});
+
+test("GPT-5.6 Responses body supports max effort and pro mode", () => {
+  const responses = buildOpenAIResponsesBody({
+    systemPrompt: "",
+    messages: [{ role: "user", content: "hello" }],
+    resolvedModel: "gpt-5.6-terra",
+    serviceTier: "priority",
+    thinkingOptions: {
+      thinkingEnabled: true,
+      reasoningEffort: "max",
+      reasoningMode: "pro"
+    },
+    forwardTools: false
+  });
+
+  assert.equal(responses.model, "gpt-5.6-terra");
+  assert.equal(responses.reasoning.effort, "max");
+  assert.equal(responses.reasoning.mode, "pro");
+  assert.equal(responses.service_tier, "priority");
+  assert.equal(thinkingEffortToOpenAIReasoningEffort("max", "gpt-5.6-luna"), "max");
+  assert.equal(thinkingEffortToOpenAIReasoningEffort("max", "gpt-5.4"), "xhigh");
+});
+
+test("GPT-5.6 mode is omitted from Chat Completions fallback", () => {
+  const chat = buildOpenAIChatCompletionsBody({
+    systemPrompt: "",
+    messages: [{ role: "user", content: "hello" }],
+    resolvedModel: "gpt-5.6-sol",
+    thinkingOptions: {
+      thinkingEnabled: true,
+      reasoningEffort: "max",
+      reasoningMode: "pro"
+    },
+    forwardTools: false
+  });
+
+  assert.equal(chat.reasoning_effort, "max");
+  assert.equal(chat.reasoning, undefined);
+});
+
+test("runtime GPT-5.6 reasoning mode is sanitized and slot-aware", () => {
+  const current = setRuntimeConfig({
+    OPENAI_REASONING_MODE: "PRO",
+    BYOK1_OPENAI_REASONING_MODE: "standard",
+    BYOK2_OPENAI_REASONING_MODE: "invalid",
+    BYOK1_OPENAI_SERVICE_TIER: "priority"
+  });
+
+  assert.equal(current.openaiReasoningMode, "pro");
+  assert.equal(getSlotReasoningMode(1), "standard");
+  assert.equal(getSlotReasoningMode(2), "");
+  assert.equal(getSlotServiceTier(1), "priority");
+
+  setRuntimeConfig({
+    OPENAI_REASONING_MODE: "",
+    BYOK1_OPENAI_REASONING_MODE: "",
+    BYOK2_OPENAI_REASONING_MODE: "",
+    BYOK1_OPENAI_SERVICE_TIER: ""
   });
 });
 
