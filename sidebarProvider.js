@@ -2053,6 +2053,9 @@ code {
   gap: 6px;
   min-height: 22px;
 }
+.card-head:has(+ .hidden) {
+  margin-bottom: 0 !important;
+}
 
 .stats {
   display: grid;
