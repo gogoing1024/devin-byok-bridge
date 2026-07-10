@@ -8,3 +8,7 @@ _deob_test/
 **/captures/**
 proxy-scripts/certs/
 proxy-scripts/debug/
+*.vsix
+test/**
+.gitignore
+.gitattributes
