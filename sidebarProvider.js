@@ -2007,6 +2007,13 @@ body {
 body::before, body::after {
   display: none;
 }
+code {
+  font: inherit;
+  color: inherit;
+  background: none;
+  padding: 0;
+  border-radius: 0;
+}
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
