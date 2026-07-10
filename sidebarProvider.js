@@ -347,6 +347,9 @@ class SidebarProvider {
     if (!String(tmp1.BYOK1_OPENAI_SERVICE_TIER || "").trim()) {
       tmp1.BYOK1_OPENAI_SERVICE_TIER = tmp1.OPENAI_SERVICE_TIER || "";
     }
+    if (!String(tmp1.BYOK1_OPENAI_REASONING_MODE || "").trim()) {
+      tmp1.BYOK1_OPENAI_REASONING_MODE = tmp1.OPENAI_REASONING_MODE || "";
+    }
     return tmp1;
   }
   validateByokSlots(tmp02) {
@@ -671,7 +674,7 @@ class SidebarProvider {
     const tmp6 = this.stripDiagnosticThinkingSuffix(tmp5);
     const tmp7 = tmp6 ? this.isDiagnosticOpenAIModel(tmp6) ? "OpenAI" : "Anthropic" : "未解析";
     const tmp8 = tmp2.endsWith("-priority") || tmp5.endsWith("-priority") ? "fast" : tmp2 === "MODEL_CLAUDE_4_OPUS_THINKING_BYOK" ? tmp1.BYOK2_OPENAI_SERVICE_TIER : tmp2 === "MODEL_CLAUDE_4_OPUS_BYOK" ? tmp1.BYOK1_OPENAI_SERVICE_TIER || tmp1.OPENAI_SERVICE_TIER : this.isDiagnosticOpenAIModel(tmp6) ? tmp1.OPENAI_SERVICE_TIER : "";
-    const tmp9 = String(tmp8 || "").trim().toLowerCase() === "fast" ? "fast" : undefined;
+    const tmp9 = ["fast", "priority"].includes(String(tmp8 || "").trim().toLowerCase()) ? String(tmp8).trim().toLowerCase() : undefined;
     return {
       requested: tmp2,
       resolved: tmp5,
@@ -712,7 +715,7 @@ class SidebarProvider {
       tmp6.push("MAX_TOKENS=" + tmp5);
     }
     const tmp7 = Number.parseInt(String(tmp02.COMPLETION_TIMEOUT_MS || "12000"), 10);
-    const tmp9 = tmp3 && String(tmp02.BYOK1_OPENAI_SERVICE_TIER || tmp02.OPENAI_SERVICE_TIER || "").trim().toLowerCase() === "fast";
+    const tmp9 = tmp3 && ["fast", "priority"].includes(String(tmp02.BYOK1_OPENAI_SERVICE_TIER || tmp02.OPENAI_SERVICE_TIER || "").trim().toLowerCase());
     if (Number.isFinite(tmp7) && tmp7 < 10000) {
       tmp6.push("补全超时 " + tmp7 + "ms 偏短");
     }
@@ -1327,6 +1330,12 @@ class SidebarProvider {
     }
     if (!["", "minimal", "low", "medium", "high", "xhigh", "max"].includes(tmp2.BYOK2_THINKING_EFFORT || "")) {
       tmp2.BYOK2_THINKING_EFFORT = "";
+    }
+    if (!["", "standard", "pro"].includes(String(tmp2.BYOK1_OPENAI_REASONING_MODE || "").toLowerCase())) {
+      tmp2.BYOK1_OPENAI_REASONING_MODE = "";
+    }
+    if (!["", "standard", "pro"].includes(String(tmp2.BYOK2_OPENAI_REASONING_MODE || "").toLowerCase())) {
+      tmp2.BYOK2_OPENAI_REASONING_MODE = "";
     }
     if (!["true", "false"].includes(tmp2.OPENAI_THINKING_ENABLED || "false")) {
       tmp2.OPENAI_THINKING_ENABLED = "false";
@@ -1963,6 +1972,8 @@ class SidebarProvider {
     const tmp33 = Object.prototype.hasOwnProperty.call(tmp2, "OPENAI_REASONING_EFFORT") ? tmp2.OPENAI_REASONING_EFFORT : "";
     const tmp40 = tmp2.BYOK1_OPENAI_SERVICE_TIER || tmp2.OPENAI_SERVICE_TIER || "";
     const tmp41 = tmp2.BYOK2_OPENAI_SERVICE_TIER || "";
+    const tmp44 = tmp2.BYOK1_OPENAI_REASONING_MODE || tmp2.OPENAI_REASONING_MODE || "";
+    const tmp45 = tmp2.BYOK2_OPENAI_REASONING_MODE || "";
     const tmp42 = this.getInstalledVersion();
     const tmp43 = this.getGitRemoteUrl();
     const tmp34 = tmp7 === tmp1.patches.length ? "badge-ok" : "badge-warn";
@@ -2929,7 +2940,8 @@ input:focus, select:focus {
                 <button type="button" class="btn btn-s sm" data-ws-action="fetchModels" data-ws-slot="1" style="padding:4px 8px">加载模型</button>
             </div>
             <div class="fg" id="cfgByok1ThinkingEffortRow"><label id="cfgByok1ThinkingLabel">${esc(thinkingEffort_1.getThinkingIntensityHint(thinkingEffort_1.detectModelProvider(tmp27)))}</label><select id="cfgByok1ThinkingEffort">${buildThinkingEffortOptions(tmp27, tmp31)}</select></div>
-            <div class="fg" id="cfgByok1ServiceTierRow"><label>GPT Fast Mode</label><select id="cfgByok1ServiceTier">${buildOpenAIServiceTierOptions(tmp40)}</select></div>
+            <div class="fg hidden" id="cfgByok1ReasoningModeRow"><label>GPT-5.6 Reasoning Mode</label><select id="cfgByok1ReasoningMode">${buildOpenAIReasoningModeOptions(tmp44)}</select></div>
+            <div class="fg" id="cfgByok1ServiceTierRow"><label>GPT Processing Tier</label><select id="cfgByok1ServiceTier">${buildOpenAIServiceTierOptions(tmp40)}</select></div>
             <div id="modelFetchStatus1" style="font-size:10px;color:${tmp17}"></div>
         </div>
         <div class="guide-block byok2-stripe" style="margin-bottom:10px">
@@ -2945,7 +2957,8 @@ input:focus, select:focus {
                 <button type="button" class="btn btn-s sm" data-ws-action="fetchModels" data-ws-slot="2" style="padding:4px 8px">加载模型</button>
             </div>
             <div class="fg" id="cfgByok2ThinkingEffortRow"><label id="cfgByok2ThinkingLabel">${esc(thinkingEffort_1.getThinkingIntensityHint(thinkingEffort_1.detectModelProvider(tmp30)))}</label><select id="cfgByok2ThinkingEffort">${buildThinkingEffortOptions(tmp30, tmp32)}</select></div>
-            <div class="fg" id="cfgByok2ServiceTierRow"><label>GPT Fast Mode</label><select id="cfgByok2ServiceTier">${buildOpenAIServiceTierOptions(tmp41)}</select></div>
+            <div class="fg hidden" id="cfgByok2ReasoningModeRow"><label>GPT-5.6 Reasoning Mode</label><select id="cfgByok2ReasoningMode">${buildOpenAIReasoningModeOptions(tmp45)}</select></div>
+            <div class="fg" id="cfgByok2ServiceTierRow"><label>GPT Processing Tier</label><select id="cfgByok2ServiceTier">${buildOpenAIServiceTierOptions(tmp41)}</select></div>
             <div id="modelFetchStatus2" style="font-size:10px;color:${tmp17}"></div>
         </div>
         <div class="guide-block" style="margin-bottom:10px">
@@ -3050,8 +3063,14 @@ input:focus, select:focus {
 }
 exports.SidebarProvider = SidebarProvider;
 function buildOpenAIServiceTierOptions(arg0) {
-  const tmp1 = String(arg0 || "").trim().toLowerCase() === "fast" ? "fast" : "";
-  return [["", "默认 · 不覆盖 service_tier"], ["fast", "Fast · service_tier=fast"]].map(([tmp2, tmp3]) => "<option value=\"" + esc(tmp2) + "\"" + (tmp1 === tmp2 ? " selected" : "") + ">" + esc(tmp3) + "</option>").join("");
+  const tmp1 = String(arg0 || "").trim().toLowerCase();
+  const tmp2 = ["fast", "priority"].includes(tmp1) ? tmp1 : "";
+  return [["", "默认 · 不覆盖 service_tier"], ["priority", "Priority · OpenAI 官方优先处理"], ["fast", "Fast · 兼容网关快速模式"]].map(([tmp3, tmp4]) => "<option value=\"" + esc(tmp3) + "\"" + (tmp2 === tmp3 ? " selected" : "") + ">" + esc(tmp4) + "</option>").join("");
+}
+function buildOpenAIReasoningModeOptions(arg0) {
+  const tmp1 = String(arg0 || "").trim().toLowerCase();
+  const tmp2 = ["standard", "pro"].includes(tmp1) ? tmp1 : "";
+  return [["", "Standard · API 默认"], ["standard", "Standard · 标准执行"], ["pro", "Pro · 更高质量 / 更高延迟成本"]].map(([tmp3, tmp4]) => "<option value=\"" + esc(tmp3) + "\"" + (tmp2 === tmp3 ? " selected" : "") + ">" + esc(tmp4) + "</option>").join("");
 }
 function buildThinkingEffortOptions(arg0, arg1) {
   return thinkingEffort_1.buildThinkingEffortOptionsHtml(arg0, arg1);

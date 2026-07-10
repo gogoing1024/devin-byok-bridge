@@ -170,9 +170,10 @@
   const tmp20 = {
     claude: [["", "关闭 · 不启用思考"], ["low", "低 · budget 5k / adaptive"], ["medium", "中 · 推荐平衡"], ["high", "高 · 复杂分析/代码"], ["xhigh", "极高 · Opus 4.7/4.8"], ["max", "Max · Claude 最深思考"]],
     gpt: [["", "关闭 · 不启用 reasoning"], ["low", "低 · reasoning.effort=low"], ["medium", "中 · reasoning.effort=medium"], ["high", "高 · reasoning.effort=high"], ["xhigh", "极高 · reasoning.effort=xhigh"]],
+    gpt56: [["", "关闭 · 不启用 reasoning"], ["low", "低 · reasoning.effort=low"], ["medium", "中 · reasoning.effort=medium"], ["high", "高 · reasoning.effort=high"], ["xhigh", "极高 · reasoning.effort=xhigh"], ["max", "Max · GPT-5.6 最深推理"]],
     gemini: [["", "默认 · medium（API 默认，不覆盖）"], ["minimal", "Minimal · 最低思考 / 最低延迟"], ["low", "Low · 速度优先"], ["medium", "Medium · 推荐平衡"], ["high", "High · 最深推理"]]
   };
-  const tmp21 = new Set(["cfgByok1Host", "cfgByok1Key", "cfgByok1Model", "cfgByok1ThinkingEffort", "cfgByok1ServiceTier", "cfgByok2Host", "cfgByok2Key", "cfgByok2Model", "cfgByok2ThinkingEffort", "cfgByok2ServiceTier", "cfgHybridPort", "cfgInferencePort", "cfgAnthropicPath", "cfgOpenaiPath", "cfgMaxTokens", "cfgCompletionTimeoutMs", "cfgSysPromptOverride", "cfgSysPromptPath"]);
+  const tmp21 = new Set(["cfgByok1Host", "cfgByok1Key", "cfgByok1Model", "cfgByok1ThinkingEffort", "cfgByok1ReasoningMode", "cfgByok1ServiceTier", "cfgByok2Host", "cfgByok2Key", "cfgByok2Model", "cfgByok2ThinkingEffort", "cfgByok2ReasoningMode", "cfgByok2ServiceTier", "cfgHybridPort", "cfgInferencePort", "cfgAnthropicPath", "cfgOpenaiPath", "cfgMaxTokens", "cfgCompletionTimeoutMs", "cfgSysPromptOverride", "cfgSysPromptPath"]);
   let tmp22 = null;
   function fn20a(arg0) {
     return !!(arg0 && arg0.id && tmp21.has(arg0.id));
@@ -218,7 +219,7 @@
     }
     return false;
   }
-  function fn18(arg0, arg1) {
+  function fn18(arg0, arg1, arg2 = "") {
     const tmp22 = String(arg1 ?? "").trim().toLowerCase();
     if (arg0 === "gemini") {
       const tmp02 = {
@@ -230,8 +231,9 @@
       return tmp23.some(([tmp03]) => tmp03 === tmp12) ? tmp12 : "";
     }
     if (arg0 === "gpt") {
-      const tmp02 = tmp22 === "max" ? "xhigh" : tmp22;
-      const tmp12 = tmp20.gpt;
+      const tmp03 = /^gpt-5\.6(?:-|$)/.test(fn14(arg2));
+      const tmp02 = tmp22 === "max" && !tmp03 ? "xhigh" : tmp22;
+      const tmp12 = tmp03 ? tmp20.gpt56 : tmp20.gpt;
       return tmp12.some(([tmp03]) => tmp03 === tmp02) ? tmp02 : "";
     }
     const tmp32 = tmp20[arg0] || tmp20.claude;
@@ -243,7 +245,12 @@
     const tmp5 = fn4("cfgByok" + tmp32 + "ThinkingEffort");
     const tmp6 = fn4("cfgByok" + tmp32 + "ThinkingLabel");
     const tmp10 = fn4("cfgByok" + tmp32 + "ServiceTierRow");
+    const tmp11 = fn4("cfgByok" + tmp32 + "ReasoningModeRow");
     const tmp7 = fn15(arg1);
+    const tmp12 = tmp7 === "gpt" && /^gpt-5\.6(?:-|$)/.test(fn14(arg1));
+    if (tmp11) {
+      tmp11.classList.toggle("hidden", !tmp12);
+    }
     if (tmp10) {
       tmp10.classList.toggle("hidden", tmp7 !== "gpt");
     }
@@ -256,8 +263,8 @@
     if (!tmp5 || !fn17(tmp7, arg1)) {
       return;
     }
-    const tmp8 = fn18(tmp7, arg2 !== undefined ? arg2 : tmp5.value);
-    const tmp9 = tmp20[tmp7] || tmp20.claude;
+    const tmp8 = fn18(tmp7, arg2 !== undefined ? arg2 : tmp5.value, arg1);
+    const tmp9 = tmp12 ? tmp20.gpt56 : tmp20[tmp7] || tmp20.claude;
     tmp5.innerHTML = tmp9.map(([tmp02, tmp12]) => "<option value=\"" + tmp02 + "\"" + (tmp8 === tmp02 ? " selected" : "") + ">" + tmp12 + "</option>").join("");
     tmp5.value = tmp8;
   }
@@ -297,6 +304,7 @@
     fn13("cfgByok" + tmp22 + "Key", tmp5);
     fn13("cfgByok" + tmp22 + "ThinkingEffort", arg0[tmp32 + "THINKING_EFFORT"] || (tmp22 === 1 ? arg0.OPENAI_REASONING_EFFORT || "" : ""));
     fn13("cfgByok" + tmp22 + "ServiceTier", arg0[tmp32 + "OPENAI_SERVICE_TIER"] || (tmp22 === 1 ? arg0.OPENAI_SERVICE_TIER || "" : ""));
+    fn13("cfgByok" + tmp22 + "ReasoningMode", arg0[tmp32 + "OPENAI_REASONING_MODE"] || (tmp22 === 1 ? arg0.OPENAI_REASONING_MODE || "" : ""));
     fn19(arg1, tmp6, arg0[tmp32 + "THINKING_EFFORT"] || (tmp22 === 1 ? arg0.OPENAI_REASONING_EFFORT || "" : ""));
     const tmp7 = fn11(tmp22);
     const tmp8 = fn();
@@ -441,6 +449,7 @@
       [tmp6 + "OPENAI_API_KEY"]: tmp22,
       [tmp6 + "OPENAI_API_PATH"]: (fn4("cfgOpenaiPath") || {}).value || "",
       [tmp6 + "OPENAI_SERVICE_TIER"]: ((fn4("cfgByok" + tmp12 + "ServiceTier") || {}).value || "").trim(),
+      [tmp6 + "OPENAI_REASONING_MODE"]: ((fn4("cfgByok" + tmp12 + "ReasoningMode") || {}).value || "").trim(),
       [tmp6 + "MODEL"]: tmp5,
       [tmp6 + "THINKING_EFFORT"]: ((fn4("cfgByok" + tmp12 + "ThinkingEffort") || {}).value || "").trim()
     };
@@ -458,6 +467,7 @@
       OPENAI_API_KEY: tmp02.BYOK1_OPENAI_API_KEY,
       OPENAI_API_PATH: tmp02.BYOK1_OPENAI_API_PATH,
       OPENAI_SERVICE_TIER: tmp02.BYOK1_OPENAI_SERVICE_TIER || "",
+      OPENAI_REASONING_MODE: tmp02.BYOK1_OPENAI_REASONING_MODE || "",
       DEFAULT_MODEL: tmp02.BYOK1_MODEL,
       MAX_TOKENS: (fn4("cfgMaxTokens") || {}).value || "16384",
       COMPLETION_TIMEOUT_MS: (fn4("cfgCompletionTimeoutMs") || {}).value || "12000",
